@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import './FileUploadApp.css';
 
 const FileUploadApp = () => {
@@ -6,232 +7,202 @@ const FileUploadApp = () => {
   const [file, setFile] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ text: '', type: '' });
-  const [retryCount, setRetryCount] = useState(0);
+  const [error, setError] = useState(null);
 
-  const API_BASE_URL = 'https://klarifai-backend-bbsr-cydgehd0hmgxcybk.centralindia-01.azurewebsites.net';
+  // Configure base URL and axios instance
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://klarifai-backend-bbsr-cydgehd0hmgxcybk.centralindia-01.azurewebsites.net';
+  const axiosInstance = axios.create({
+    baseURL: API_BASE_URL,
+    timeout: 10000,  // 10 seconds timeout
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      'Accept': 'application/json',
+    },
+  });
 
+  // Fetch documents on component mount
   useEffect(() => {
     fetchDocuments();
-  }, [retryCount]);
+  }, []);
 
-  const showMessage = (text, type = 'error') => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage({ text: '', type: '' }), 5000);
-  };
-
+  // Fetch documents from backend
   const fetchDocuments = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/api/documents/`, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
+      setError(null);
       
-      if (data.success) {
-        // Ensure all document URLs point to the correct Blob Storage container
-        const processedDocs = data.documents.map(doc => ({
-          ...doc,
-          file_url: doc.file_url.replace('/media/', '/documents/') // Adjust path if needed
-        }));
-        setDocuments(processedDocs);
+      const response = await axiosInstance.get('/api/documents/');
+      
+      if (response.data.success) {
+        setDocuments(response.data.documents);
       } else {
-        throw new Error(data.message || 'Failed to fetch documents');
+        throw new Error(response.data.message || 'Failed to fetch documents');
       }
-    } catch (error) {
-      console.error('Error fetching documents:', error);
-      showMessage(`Failed to load documents: ${error.message}`);
+    } catch (err) {
+      console.error('Document fetch error:', err);
+      setError(err.message || 'Unable to fetch documents');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    
-    // Enhanced client-side validation
-    if (selectedFile) {
-      const validTypes = [
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'text/plain'
-      ];
-      const validExtensions = ['.pdf', '.doc', '.docx', '.txt'];
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      
-      // Check both MIME type and file extension
-      const fileExt = selectedFile.name.split('.').pop().toLowerCase();
-      if (!validTypes.includes(selectedFile.type) || !validExtensions.includes(`.${fileExt}`)) {
-        showMessage('Invalid file type. Please upload PDF, DOC, DOCX, or TXT files.');
-        e.target.value = '';
-        return;
-      }
-      
-      if (selectedFile.size > maxSize) {
-        showMessage('File size exceeds 10MB limit.');
-        e.target.value = '';
-        return;
-      }
-      
-      setFile(selectedFile);
+  // File validation
+  const validateFile = (file) => {
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error('Invalid file type. Please upload PDF, DOC, DOCX, or TXT files.');
+    }
+
+    if (file.size > maxSize) {
+      throw new Error('File size must be under 10MB');
     }
   };
 
+  // Handle file selection
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    
+    try {
+      if (selectedFile) {
+        validateFile(selectedFile);
+        setFile(selectedFile);
+        setError(null);
+      }
+    } catch (err) {
+      setError(err.message);
+      e.target.value = null;
+    }
+  };
+
+  // Submit file upload
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!title.trim()) {
-      showMessage('Please provide a document title');
-      return;
-    }
-    
-    if (!file) {
-      showMessage('Please select a file to upload');
+      setError('Please provide a document title');
       return;
     }
 
-    setLoading(true);
+    if (!file) {
+      setError('Please select a file');
+      return;
+    }
+
     const formData = new FormData();
     formData.append('title', title.trim());
     formData.append('file', file);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/upload/`, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      });
+      setLoading(true);
+      setError(null);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
+      const response = await axiosInstance.post('/api/upload/', formData);
 
-      const data = await response.json();
-      
-      if (data.success) {
-        showMessage('File uploaded successfully to Azure Blob Storage!', 'success');
+      if (response.data.success) {
+        // Reset form and refresh documents
         setTitle('');
         setFile(null);
-        document.getElementById('file-input').value = '';
+        document.getElementById('file-input').value = null;
+        
+        // Fetch updated document list
         await fetchDocuments();
+        
+        alert('File uploaded successfully!');
       } else {
-        throw new Error(data.message || 'Upload failed');
+        throw new Error(response.data.message || 'Upload failed');
       }
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      showMessage(`Upload failed: ${error.message}`);
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError(err.message || 'Unable to upload file');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRetry = () => {
-    setRetryCount(prev => prev + 1);
+  // Download document
+  const handleDownload = (fileUrl) => {
+    window.open(fileUrl, '_blank');
   };
 
   return (
     <div className="file-upload-container">
-      <h2 className="section-title">Azure Blob Storage Document Management</h2>
-      
-      {message.text && (
-        <div className={`message-box ${message.type === 'success' ? 'success' : 'error'}`}>
-          {message.text}
-          {message.type === 'error' && (
-            <button onClick={handleRetry} className="retry-button">Retry</button>
-          )}
+      <h2>Document Upload Management</h2>
+
+      {/* Error Display */}
+      {error && (
+        <div className="error-message">
+          <p>{error}</p>
         </div>
       )}
-      
-      {loading && (
-        <div className="loading-overlay">
-          <div className="spinner"></div>
-          <p>Connecting to Azure Blob Storage...</p>
+
+      {/* Upload Form */}
+      <form onSubmit={handleSubmit} className="upload-form">
+        <div className="form-group">
+          <label>Document Title</label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Enter document title"
+            required
+          />
         </div>
-      )}
-      
-      <div className="upload-section">
-        <h3 className="subsection-title">Upload to Azure Blob Storage</h3>
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label htmlFor="title">Document Title *</label>
-            <input
-              type="text"
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter document title"
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label htmlFor="file-input">File * (PDF, DOC, DOCX, TXT, max 10MB)</label>
-            <input
-              id="file-input"
-              type="file"
-              onChange={handleFileChange}
-              accept=".pdf,.doc,.docx,.txt"
-              required
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="submit-button"
-          >
-            {loading ? 'Uploading to Azure...' : 'Upload to Blob Storage'}
-          </button>
-        </form>
-      </div>
-      
-      <div className="documents-section">
-        <h3 className="subsection-title">Documents in Azure Container</h3>
-        {documents.length === 0 ? (
-          <p className="no-documents">No documents found in the 'documents' container.</p>
+
+        <div className="form-group">
+          <label>File Upload (PDF, DOC, DOCX, TXT)</label>
+          <input
+            id="file-input"
+            type="file"
+            onChange={handleFileChange}
+            accept=".pdf,.doc,.docx,.txt"
+            required
+          />
+        </div>
+
+        <button 
+          type="submit" 
+          disabled={loading}
+          className="submit-button"
+        >
+          {loading ? 'Uploading...' : 'Upload Document'}
+        </button>
+      </form>
+
+      {/* Documents List */}
+      <div className="documents-list">
+        <h3>Uploaded Documents</h3>
+        {loading ? (
+          <p>Loading documents...</p>
         ) : (
-          <div className="table-container">
-            <table className="documents-table">
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Uploaded At</th>
-                  <th>File Size</th>
-                  <th>Action</th>
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Uploaded At</th>
+                <th>File Size</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {documents.map((doc) => (
+                <tr key={doc.id}>
+                  <td>{doc.title}</td>
+                  <td>{new Date(doc.uploaded_at).toLocaleString()}</td>
+                  <td>{(doc.file_size / 1024 / 1024).toFixed(2)} MB</td>
+                  <td>
+                    <button 
+                      onClick={() => handleDownload(doc.file_url)}
+                      className="download-button"
+                    >
+                      Download
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {documents.map((doc) => (
-                  <tr key={doc.id}>
-                    <td>{doc.title}</td>
-                    <td>{new Date(doc.uploaded_at).toLocaleString()}</td>
-                    <td>{(doc.file_size / (1024 * 1024)).toFixed(2)} MB</td>
-                    <td>
-                      <a
-                        href={`${doc.file_url}${doc.file_url.includes('?') ? '&' : '?'}download=true`}
-                        className="download-link"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download
-                      >
-                        Download from Azure
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </div>
