@@ -1,6 +1,6 @@
 from django.db import models
 from django.utils import timezone
-
+import os
 class Document(models.Model):
     title = models.CharField(max_length=255)
     file = models.FileField(upload_to='documents/')  # This path is relative to your Azure container
