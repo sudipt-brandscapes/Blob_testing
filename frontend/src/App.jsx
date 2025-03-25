@@ -1,29 +1,27 @@
-import React from 'react';
-import FileUploadApp from './components/FileUploadApp';
+import React, { useState } from 'react';
+import FileUploadComponent from './FileUploadComponent';
+import DocumentListComponent from './DocumentListComponent';
 import './App.css';
- 
+
 function App() {
+  const [refreshList, setRefreshList] = useState(false);
+
+  const handleUploadSuccess = () => {
+    setRefreshList(prev => !prev);
+  };
+
   return (
-<div className="app">
-<nav className="navbar">
-<div className="navbar-container">
-<h1 className="app-title">Document Manager</h1>
-</div>
-</nav>
-<main className="main-content">
-<div className="container">
-<FileUploadApp />
-</div>
-</main>
-<footer className="footer">
-<div className="container">
-<p className="copyright">
-&copy; {new Date().getFullYear()} Document Management System
-</p>
-</div>
-</footer>
-</div>
+    <div className="App">
+      <header className="App-header">
+        <h1>Azure Blob Storage with Django and React</h1>
+      </header>
+      
+      <main>
+        <FileUploadComponent onUploadSuccess={handleUploadSuccess} />
+        <DocumentListComponent key={refreshList} />
+      </main>
+    </div>
   );
 }
- 
+
 export default App;
