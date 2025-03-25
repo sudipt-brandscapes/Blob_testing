@@ -1,67 +1,51 @@
 import os
- 
 from pathlib import Path
- 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
- 
+from dotenv import load_dotenv  # Optional but recommended
+
+# Load environment variables from .env file (for local development)
+load_dotenv()
+
+# Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
- 
-# SECURITY WARNING: keep the secret key used in production secret!
- 
-# Get secret key from environment variable
- 
-SECRET_KEY = os.environ.get('MY_SECRET_KEY')
- 
-# SECURITY WARNING: don't run with debug turned on in production!
- 
-# Set DEBUG based on environment variable - defaults to False for production safety
- 
-DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
- 
-# Set your Azure web app URL here, or better, get from environment
- 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '169.254.130.3']
- 
-# Application definition
- 
-INSTALLED_APPS = [
- 
-    'django.contrib.admin',
- 
-    'django.contrib.auth',
- 
-    'django.contrib.contenttypes',
- 
-    'django.contrib.sessions',
- 
-    'django.contrib.messages',
- 
-    'django.contrib.staticfiles',
- 
-    'app1',
- 
-    'rest_framework',
- 
-    'storages',
- 
-    'corsheaders',  # Make sure this is installed
- 
+
+# ========================
+# Security Settings
+# ========================
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-key-for-local-only')
+
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    'your-app-name.azurewebsites.net',  # Replace with your Azure App Service URL
+    'victorious-ocean-05a3a040f.6.azurestaticapps.net',  # Your frontend URL
 ]
- 
-# Azure Blob Storage settings from environment variables
- 
-AZURE_ACCOUNT_NAME = os.environ.get('AZURE_ACCOUNT_NAME')
- 
-AZURE_ACCOUNT_KEY = os.environ.get('AZURE_ACCOUNT_KEY')
- 
-AZURE_CONTAINER = os.environ.get('AZURE_CONTAINER', 'django')
- 
-AZURE_CUSTOM_DOMAIN = f'{AZURE_ACCOUNT_NAME}.blob.core.windows.net'
- 
+
+# ========================
+# Application Definition
+# ========================
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    
+    # Third-party
+    'rest_framework',
+    'corsheaders',
+    'storages',
+    
+    # Local
+    'app1',
+]
+
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',  # Should be first
-    'corsheaders.middleware.CorsMiddleware',         # Before CommonMiddleware
-    'whitenoise.middleware.WhiteNoiseMiddleware',    # After SecurityMiddleware
+    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -69,305 +53,116 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
- 
+
 ROOT_URLCONF = 'BlobProject.urls'
- 
+
 TEMPLATES = [
- 
     {
- 
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
- 
         'DIRS': [],
- 
         'APP_DIRS': True,
- 
         'OPTIONS': {
- 
             'context_processors': [
- 
                 'django.template.context_processors.debug',
- 
                 'django.template.context_processors.request',
- 
                 'django.contrib.auth.context_processors.auth',
- 
                 'django.contrib.messages.context_processors.messages',
- 
             ],
- 
         },
- 
     },
- 
 ]
- 
+
 WSGI_APPLICATION = 'BlobProject.wsgi.application'
- 
+
+# ========================
 # Database
- 
-# Use Azure PostgreSQL
- 
-try:
- 
-    # Get the connection string from environment variable
- 
-    CONNECTION = os.environ.get('AZURE_POSTGRESQL_CONNECTIONSTRING')
- 
-    # Parse the connection string into components
- 
-    CONNECTION_STR = {pair.split('=')[0]: pair.split('=')[1]
- 
-                     for pair in CONNECTION.split(' ')}
- 
-    DATABASES = {
- 
-        'default': {
- 
+# ========================
+def get_db_config():
+    """Configure database based on environment."""
+    if 'AZURE_POSTGRESQL_CONNECTIONSTRING' in os.environ:
+        conn_str = os.environ['AZURE_POSTGRESQL_CONNECTIONSTRING']
+        return {
             'ENGINE': 'django.db.backends.postgresql',
- 
-            'NAME': CONNECTION_STR.get('dbname'),
- 
-            'USER': CONNECTION_STR.get('user'),
- 
-            'PASSWORD': CONNECTION_STR.get('password'),
- 
-            'HOST': CONNECTION_STR.get('host'),
- 
-            'PORT': '5432',
- 
+            **{k: v for k, v in [pair.split('=') for pair in conn_str.split(' ')]},
             'OPTIONS': {'sslmode': 'require'},
- 
             'CONN_MAX_AGE': 600,
- 
-        },
- 
-    }
- 
-except Exception as e:
- 
-    # Fallback for local development or if connection string is missing
- 
-    print(f"Error setting up database: {e}")
- 
-    print("Using SQLite as fallback")
- 
-    DATABASES = {
- 
-        'default': {
- 
-            'ENGINE': 'django.db.backends.sqlite3',
- 
-            'NAME': BASE_DIR / 'db.sqlite3',
- 
         }
- 
+    return {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
- 
-# CORS settings - more restrictive for production
- 
+
+DATABASES = {'default': get_db_config()}
+
+# ========================
+# CORS & Security
+# ========================
+CORS_ALLOWED_ORIGINS = [
+    'https://victorious-ocean-05a3a040f.6.azurestaticapps.net',
+    'http://localhost:3000',  # For local frontend development
+]
+
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS.copy()
+
 if DEBUG:
- 
     CORS_ALLOW_ALL_ORIGINS = True
- 
-else:
- 
-    CORS_ALLOW_ALL_ORIGINS = False
- 
-    CORS_ALLOWED_ORIGINS = [
- 
-        # List your frontend origins here
- 
-        os.environ.get('FRONTEND_URL', 'https://victorious-ocean-05a3a040f.6.azurestaticapps.net'),
- 
-        'https://victorious-ocean-05a3a040f.6.azurestaticapps.net',  # For local development
- 
-    ]
- 
-CORS_ALLOW_METHODS = [
- 
-    'DELETE',
- 
-    'GET',
- 
-    'OPTIONS',
- 
-    'PATCH',
- 
-    'POST',
- 
-    'PUT',
- 
-]
- 
-CORS_ALLOW_HEADERS = [
- 
-    'accept',
- 
-    'accept-encoding',
- 
-    'authorization',
- 
-    'content-type',
- 
-    'dnt',
- 
-    'origin',
- 
-    'user-agent',
- 
-    'x-csrftoken',
- 
-    'x-requested-with',
- 
-]
- 
-# Password validation
- 
-AUTH_PASSWORD_VALIDATORS = [
- 
-    {
- 
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
- 
-    },
- 
-    {
- 
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
- 
-    },
- 
-    {
- 
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
- 
-    },
- 
-    {
- 
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
- 
-    },
- 
-]
- 
-# REST Framework settings
- 
-REST_FRAMEWORK = {
- 
-    'DEFAULT_PERMISSION_CLASSES': [
- 
-        'rest_framework.permissions.AllowAny',  # Consider changing this for production
- 
-    ],
- 
-}
- 
-# Internationalization
- 
-LANGUAGE_CODE = 'en-us'
- 
-TIME_ZONE = 'UTC'
- 
-USE_I18N = True
- 
-USE_TZ = True
- 
-# Static and Media Files with Azure Blob Storage
- 
-DEFAULT_FILE_STORAGE = 'storages.backends.azure_storage.AzureStorage'
- 
-STATICFILES_STORAGE = 'storages.backends.azure_storage.AzureStorage'
- 
-# Azure URLs
- 
-STATIC_URL = f'https://{AZURE_CUSTOM_DOMAIN}/{AZURE_CONTAINER}/static/'
- 
-MEDIA_URL = f'https://{AZURE_CUSTOM_DOMAIN}/{AZURE_CONTAINER}/media/'
- 
-# Local static files (in addition to Azure)
- 
+    CSRF_TRUSTED_ORIGINS.append('http://*')
+
+# ========================
+# Azure Blob Storage
+# ========================
+AZURE_ACCOUNT_NAME = os.environ.get('AZURE_ACCOUNT_NAME', 'devaccount')
+AZURE_ACCOUNT_KEY = os.environ.get('AZURE_ACCOUNT_KEY', 'devkey')
+AZURE_CONTAINER = os.environ.get('AZURE_CONTAINER', 'django')
+AZURE_CUSTOM_DOMAIN = f'{AZURE_ACCOUNT_NAME}.blob.core.windows.net'
+AZURE_SSL = True
+
+# ========================
+# Static & Media Files
+# ========================
+# Static files (Whitenoise)
+STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
- 
-# Default primary key field type
- 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
- 
-# Production security settings
- 
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Media files (Azure)
+DEFAULT_FILE_STORAGE = 'storages.backends.azure_storage.AzureStorage'
+MEDIA_URL = f'https://{AZURE_CUSTOM_DOMAIN}/{AZURE_CONTAINER}/media/'
+
+# ========================
+# REST Framework
+# ========================
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',  # Lock down in production
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.MultiPartParser',
+        'rest_framework.parsers.JSONParser',
+    ],
+}
+
+# ========================
+# Production Security
+# ========================
 if not DEBUG:
- 
-    # HTTPS settings
- 
     SECURE_SSL_REDIRECT = True
- 
     SECURE_HSTS_SECONDS = 31536000  # 1 year
- 
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
- 
     SECURE_HSTS_PRELOAD = True
- 
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
- 
-    # Cookie settings
- 
     SESSION_COOKIE_SECURE = True
- 
     CSRF_COOKIE_SECURE = True
- 
-    # Content security policy
- 
-    SECURE_REFERRER_POLICY = 'same-origin'
- 
-    SECURE_BROWSER_XSS_FILTER = True
- 
-    # Log settings for production
- 
-    LOGGING = {
- 
-        'version': 1,
- 
-        'disable_existing_loggers': False,
- 
-        'formatters': {
- 
-            'verbose': {
- 
-                'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
- 
-                'style': '{',
- 
-            },
- 
-        },
- 
-        'handlers': {
- 
-            'console': {
- 
-                'level': 'INFO',
- 
-                'class': 'logging.StreamHandler',
- 
-                'formatter': 'verbose'
- 
-            },
- 
-        },
- 
-        'loggers': {
- 
-            'django': {
- 
-                'handlers': ['console'],
- 
-                'level': 'INFO',
- 
-                'propagate': True,
- 
-            },
- 
-        },
- 
-    }
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# ========================
+# Internationalization
+# ========================
+LANGUAGE_CODE = 'en-us'
+TIME_ZONE = 'UTC'
+USE_I18N = True
+USE_TZ = True
+
+# ========================
+# Default Auto Field
+# ========================
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
