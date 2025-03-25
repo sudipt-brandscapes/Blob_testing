@@ -26,19 +26,19 @@ jobs:
 
       - name: Create and start virtual environment
         run: |
-          cd app1
+          cd BlobProject
           python -m venv venv
           source venv/bin/activate
       
       - name: Install dependencies
         run: |
-          cd app1
+          cd BlobProject
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Collect static files
         run: |
-          cd app1
+          cd BlobProject
           python manage.py collectstatic --noinput
        
         
@@ -46,7 +46,7 @@ jobs:
 
       - name: Zip artifact for deployment
         run: |
-          cd app1 
+          cd BlobProject 
           zip release.zip ./* -r
 
       - name: Upload artifact for deployment jobs
@@ -54,7 +54,7 @@ jobs:
         with:
           name: python-app
           path: |
-            app1/release.zip
+            BlobProject/release.zip
             !venv/
 
   deploy:
