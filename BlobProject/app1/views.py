@@ -1,3 +1,4 @@
+import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -8,7 +9,9 @@ from .models import Document
 from .forms import DocumentUploadForm
 import os
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from storages.backends.azure_storage import AzureStorage
+
+logger = logging.getLogger(__name__)
 
 class DocumentUploadView(APIView):
     parser_classes = (MultiPartParser, FormParser)
@@ -18,6 +21,7 @@ class DocumentUploadView(APIView):
         form = DocumentUploadForm(request.data, request.FILES)
         
         if not form.is_valid():
+            logger.warning(f"Form validation failed: {form.errors}")
             return Response({
                 'success': False,
                 'message': 'Validation error',
@@ -26,19 +30,30 @@ class DocumentUploadView(APIView):
             
         try:
             document = form.save()
+            
+            # Verify file was saved to Azure
+            storage = AzureStorage()
+            if not storage.exists(document.file.name):
+                raise Exception("File was not properly saved to Azure Blob Storage")
+            
+            logger.info(f"Document uploaded successfully: {document.title}")
             return Response({
                 'success': True,
                 'document': {
                     'id': document.id,
                     'title': document.title,
-                    'uploaded_at': document.uploaded_at.strftime('%Y-%m-%d %H:%M:%S')
+                    'uploaded_at': document.uploaded_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    'file_url': document.file.url,
+                    'file_name': os.path.basename(document.file.name),
+                    'file_size': document.file.size
                 }
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
+            logger.error(f"Error uploading document: {str(e)}")
             return Response({
                 'success': False,
-                'message': str(e)
+                'message': 'Failed to upload document to Azure Blob Storage'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class DocumentListView(APIView):
@@ -47,13 +62,27 @@ class DocumentListView(APIView):
     def get(self, request, format=None):
         try:
             documents = Document.objects.all().order_by('-uploaded_at')
-            documents_list = [{
-                'id': doc.id,
-                'title': doc.title,
-                'file_url': doc.file.url,
-                'uploaded_at': doc.uploaded_at.strftime('%Y-%m-%d %H:%M:%S'),
-                'file_name': os.path.basename(doc.file.name)
-            } for doc in documents]
+            
+            # Test Azure connection
+            storage = AzureStorage()
+            if not storage.exists(''):  # Test listing
+                raise Exception("Cannot connect to Azure Blob Storage")
+            
+            documents_list = []
+            for doc in documents:
+                try:
+                    documents_list.append({
+                        'id': doc.id,
+                        'title': doc.title,
+                        'file_url': doc.file.url,
+                        'uploaded_at': doc.uploaded_at.strftime('%Y-%m-%d %H:%M:%S'),
+                        'file_name': os.path.basename(doc.file.name),
+                        'file_size': doc.file.size,
+                        'file_type': os.path.splitext(doc.file.name)[1].lower()
+                    })
+                except Exception as e:
+                    logger.error(f"Error processing document {doc.id}: {str(e)}")
+                    continue
             
             return Response({
                 'success': True,
@@ -61,9 +90,10 @@ class DocumentListView(APIView):
             })
             
         except Exception as e:
+            logger.error(f"Error listing documents: {str(e)}")
             return Response({
                 'success': False,
-                'message': str(e)
+                'message': 'Failed to retrieve documents from Azure Blob Storage'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class DocumentDownloadView(APIView):
@@ -72,17 +102,27 @@ class DocumentDownloadView(APIView):
     def get(self, request, document_id, format=None):
         try:
             document = Document.objects.get(id=document_id)
-            # You can add download tracking or other logic here if needed
-            return HttpResponseRedirect(document.file.url)
+            
+            # Verify file exists in Azure
+            storage = AzureStorage()
+            if not storage.exists(document.file.name):
+                raise Exception("File not found in Azure Blob Storage")
+            
+            # Force download with original filename
+            response = HttpResponseRedirect(document.file.url)
+            response['Content-Disposition'] = f'attachment; filename="{os.path.basename(document.file.name)}"'
+            return response
             
         except Document.DoesNotExist:
+            logger.warning(f"Document not found: {document_id}")
             return Response({
                 'success': False,
                 'message': 'Document not found'
             }, status=status.HTTP_404_NOT_FOUND)
             
         except Exception as e:
+            logger.error(f"Error downloading document {document_id}: {str(e)}")
             return Response({
                 'success': False,
-                'message': str(e)
+                'message': 'Failed to download document from Azure Blob Storage'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
