@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
  
 # Get secret key from environment variable
  
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+SECRET_KEY = os.environ.get('MY_SECRET_KEY')
  
 # SECURITY WARNING: don't run with debug turned on in production!
  
@@ -20,15 +20,7 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
  
 # Set your Azure web app URL here, or better, get from environment
  
-ALLOWED_HOSTS = [
- 
-    os.environ.get('DJANGO_ALLOWED_HOST', '.azurewebsites.net'),
- 
-    'localhost',
- 
-    '127.0.0.1',
- 
-]
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '169.254.130.3']
  
 # Application definition
  
