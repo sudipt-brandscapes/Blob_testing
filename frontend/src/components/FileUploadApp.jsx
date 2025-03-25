@@ -14,7 +14,7 @@ const FileUploadApp = () => {
  
   const fetchDocuments = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/documents/');
+      const response = await fetch('https://klarifai-backend-bbsr-cydgehd0hmgxcybk.centralindia-01.azurewebsites.net/api/documents/');
       const data = await response.json();
       if (data.success) {
         setDocuments(data.documents);
@@ -39,7 +39,7 @@ const FileUploadApp = () => {
     formData.append('title', title);
     formData.append('file', file);
     try {
-      const response = await fetch('http://localhost:8000/api/upload/', {
+      const response = await fetch('https://klarifai-backend-bbsr-cydgehd0hmgxcybk.centralindia-01.azurewebsites.net/api/upload/', {
         method: 'POST',
         body: formData,
       });
