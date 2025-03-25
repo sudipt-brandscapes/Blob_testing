@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import FileUploadComponent from './FileUploadComponent';
-import DocumentListComponent from './DocumentListComponent';
+import FileUploadComponent from './components/FileUploadComponent';
+import DocumentListComponent from './components/DocumentListComponent';
 import './App.css';
 
 function App() {
@@ -18,7 +18,7 @@ function App() {
       
       <main>
         <FileUploadComponent onUploadSuccess={handleUploadSuccess} />
-        <DocumentListComponent key={refreshList} />
+        <DocumentListComponent key={refreshList.toString()} />
       </main>
     </div>
   );
