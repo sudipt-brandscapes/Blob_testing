@@ -59,25 +59,15 @@ AZURE_CONTAINER = os.environ.get('AZURE_CONTAINER', 'django')
 AZURE_CUSTOM_DOMAIN = f'{AZURE_ACCOUNT_NAME}.blob.core.windows.net'
  
 MIDDLEWARE = [
- 
-    'corsheaders.middleware.CorsMiddleware',  # Keep CORS at the top
- 
-    'django.middleware.security.SecurityMiddleware',
- 
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # Add WhiteNoise for static files (if not using Azure for static)
- 
+    'django.middleware.security.SecurityMiddleware',  # Should be first
+    'corsheaders.middleware.CorsMiddleware',         # Before CommonMiddleware
+    'whitenoise.middleware.WhiteNoiseMiddleware',    # After SecurityMiddleware
     'django.contrib.sessions.middleware.SessionMiddleware',
- 
     'django.middleware.common.CommonMiddleware',
- 
     'django.middleware.csrf.CsrfViewMiddleware',
- 
     'django.contrib.auth.middleware.AuthenticationMiddleware',
- 
     'django.contrib.messages.middleware.MessageMiddleware',
- 
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
- 
 ]
  
 ROOT_URLCONF = 'BlobProject.urls'
