@@ -2,12 +2,14 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import AllowAny
+from django.http import HttpResponseRedirect
 from .models import Document
-from .serializers import DocumentSerializer
 
 class DocumentUploadView(APIView):
     parser_classes = (MultiPartParser, FormParser)
-    
+    permission_classes = [AllowAny]
+
     def post(self, request, format=None):
         title = request.data.get('title')
         file = request.data.get('file')
@@ -23,29 +25,40 @@ class DocumentUploadView(APIView):
             file=file
         )
         
-        serializer = DocumentSerializer(document)
         return Response({
             'success': True,
-            'document': serializer.data
+            'document': {
+                'id': document.id,
+                'title': document.title,
+                'file_url': document.file.url,
+                'uploaded_at': document.uploaded_at.strftime('%Y-%m-%d %H:%M:%S')
+            }
         }, status=status.HTTP_201_CREATED)
 
 class DocumentListView(APIView):
+    permission_classes = [AllowAny]
+    
     def get(self, request, format=None):
         documents = Document.objects.all().order_by('-uploaded_at')
-        serializer = DocumentSerializer(documents, many=True)
+        documents_list = [{
+            'id': doc.id,
+            'title': doc.title,
+            'file_url': doc.file.url,
+            'uploaded_at': doc.uploaded_at.strftime('%Y-%m-%d %H:%M:%S')
+        } for doc in documents]
+        
         return Response({
             'success': True,
-            'documents': serializer.data
+            'documents': documents_list
         })
 
 class DocumentDownloadView(APIView):
+    permission_classes = [AllowAny]
+    
     def get(self, request, document_id, format=None):
         try:
             document = Document.objects.get(id=document_id)
-            return Response({
-                'success': True,
-                'file_url': document.file_url
-            })
+            return HttpResponseRedirect(document.file.url)
         except Document.DoesNotExist:
             return Response({
                 'success': False,

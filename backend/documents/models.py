@@ -1,21 +1,10 @@
 from django.db import models
+from django.utils import timezone
 
 class Document(models.Model):
     title = models.CharField(max_length=255)
     file = models.FileField(upload_to='documents/')
-    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
         return self.title
-
-    @property
-    def file_url(self):
-        return self.file.url
-
-    @property
-    def file_name(self):
-        return self.file.name.split('/')[-1]
-
-    @property
-    def file_size(self):
-        return self.file.size

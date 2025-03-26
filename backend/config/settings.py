@@ -3,15 +3,13 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-dev-key')
-
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+SECRET_KEY = os.environ.get('MY_SECRET_KEY')
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = [
+    os.environ.get('DJANGO_ALLOWED_HOST', '.azurewebsites.net'),
     'localhost',
     '127.0.0.1',
-    'your-app-name.azurewebsites.net',
-    'https://victorious-ocean-05a3a040f.6.azurestaticapps.net',
 ]
 
 INSTALLED_APPS = [
@@ -21,16 +19,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'config',
     'rest_framework',
-    'corsheaders',
     'storages',
-    'documents.apps.DocumentsConfig',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -39,7 +37,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'config.urls'
+ROOT_URLCONF = 'BlobProject.urls'
 
 TEMPLATES = [
     {
@@ -57,59 +55,68 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'config.wsgi.application'
+WSGI_APPLICATION = 'BlobProject.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Database configuration (same as your existing code)
+try:
+    CONNECTION = os.environ.get('AZURE_POSTGRESQL_CONNECTIONSTRING')
+    CONNECTION_STR = {pair.split('=')[0]: pair.split('=')[1] for pair in CONNECTION.split(' ')}
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': CONNECTION_STR.get('dbname'),
+            'USER': CONNECTION_STR.get('user'),
+            'PASSWORD': CONNECTION_STR.get('password'),
+            'HOST': CONNECTION_STR.get('host'),
+            'PORT': '5432',
+            'OPTIONS': {'sslmode': 'require'},
+            'CONN_MAX_AGE': 600,
+        },
     }
-}
-
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
-
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
-USE_I18N = True
-USE_TZ = True
+except Exception as e:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # Azure Blob Storage Configuration
-DEFAULT_FILE_STORAGE = 'storages.backends.azure_storage.AzureStorage'
 AZURE_ACCOUNT_NAME = os.environ.get('AZURE_ACCOUNT_NAME')
 AZURE_ACCOUNT_KEY = os.environ.get('AZURE_ACCOUNT_KEY')
 AZURE_CONTAINER = os.environ.get('AZURE_CONTAINER', 'documents')
 AZURE_CUSTOM_DOMAIN = f'{AZURE_ACCOUNT_NAME}.blob.core.windows.net'
-AZURE_SSL = True
+AZURE_LOCATION = ''
 
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = '/static/'
+DEFAULT_FILE_STORAGE = 'storages.backends.azure_storage.AzureStorage'
+STATICFILES_STORAGE = 'storages.backends.azure_storage.AzureStorage'
+
+STATIC_URL = f'https://{AZURE_CUSTOM_DOMAIN}/{AZURE_CONTAINER}/static/'
+MEDIA_URL = f'https://{AZURE_CUSTOM_DOMAIN}/{AZURE_CONTAINER}/media/'
+
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
-# CORS Settings
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
-    'https://victorious-ocean-05a3a040f.6.azurestaticapps.net',
-]
+# CORS settings
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+else:
+    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOWED_ORIGINS = [
+        os.environ.get('FRONTEND_URL', 'https://victorious-ocean-05a3a040f.6.azurestaticapps.net'),
+    ]
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],
-    'DEFAULT_PARSER_CLASSES': [
-        'rest_framework.parsers.JSONParser',
-        'rest_framework.parsers.MultiPartParser',
-    ],
 }
+
+# Security settings for production
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
